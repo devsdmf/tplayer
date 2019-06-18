@@ -56,6 +56,8 @@ INCLUDE(CheckCCompilerFlag)
 INCLUDE(CheckCSourceCompiles)
 INCLUDE(tplayer_macros)
 
+CHECK_MULTI_INCLUDE_FILES("ncurses.h" "curses.h" "ncurses/curses.h")
+
 SET(EXTRA_LIBS )
 
 FIND_PATH(MIKMOD_INCLUDE_DIR mikmod.h)
@@ -65,6 +67,66 @@ IF (MIKMOD_LIBRARIES STREQUAL "MIKMOD_LIBRARIES-NOTFOUND")
 ELSE()
     MESSAGE(STATUS "Found MikMod: ${MIKMOD_LIBRARIES}")
 ENDIF()
+
+IF(UNIX OR APPLE)
+    INCLUDE(FindCurses)
+    IF(NOT CURSES_FOUND)
+        MESSAGE(FATAL_ERROR "Curses library not found.")
+    ENDIF()
+
+    IF(HAVE_NCURSES_H)
+        SET(CURSES_HDR "ncurses.h")
+    ELSEIF(HAVE_CURSES_H)
+        SET(CURSES_HDR "curses.h")
+    ELSEIF(HAVE_NCURSES_CURSES_H)
+        SET(CURSES_HDR "ncurses/curses.h")
+    ELSE()
+        MESSAGE(FATAL_ERROR "Neither curses.h nor ncurses.h found.")
+    ENDIF()
+
+    SET(CMAKE_REQUIRED_LIBRARIES ${CURSES_LIBRARY})
+    CHECK_FUNCTION_EXISTS(resizeterm HAVE_NCURSES_RESIZETERM)
+    CHECK_C_SOURCE_COMPILES(
+        "#include <${CURSES_HDR}>
+        int main(void) {
+        #ifdef ACS_ULCORNER
+        return ACS_ULCORNER;
+        #endif
+        return 0;
+        }"
+        CURSES_LINKSOK
+    )
+
+    IF(CURSES_LINKSOK)
+        LIST(APPEND EXTRA_LIBS ${CURSES_LIBRARY})
+    ELSE()
+        FIND_LIBRARY(TINFO_LIBRARY tinfo)
+        IF(TINFO_LIBRARY STREQUAL "TINFO_LIBRARY-NOTFOUND")
+            MESSAGE(FATAL_ERROR "libtinfo needed for ncurses, but not found")
+        ELSE()
+            MESSAGE(STATUS "Found libtinfo: ${TINFO_LIBRARY}")
+            SET(CMAKE_REQUIRED_LIBRARIES ${CURSES_LIBRARY} ${TINFO_LIBRARY})
+            CHECK_C_SOURCE_COMPILES(
+                "#include <${CURSES_HDR}>
+                int main(void) {
+                #ifdef ACS_ULCORNER
+                return ACS_ULCORNER;
+                #endif
+                return 0;
+                }"
+                TINFO_LINKSOK
+            )
+            
+            IF(TINFO_LINKSOK)
+                LIST(APPEND EXTRA_LIBS ${CURSES_LIBRARY})
+                LIST(APPEND EXTRA_LIBS ${TINFO_LIBRARY})
+            ELSE()
+                MESSAGE(FATAL_ERROR "failed linking to ncruses library.")
+            ENDIF()
+        ENDIF()
+    ENDIF()
+ENDIF()
+
 
 SET(HAVE_PTHREAD)
 IF (NOT WIN32)
@@ -121,7 +183,7 @@ SET (PACKAGE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/mikmod")
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/config.h.cmake ${CMAKE_BINARY_DIR}/config.h) # So it can find config.h
 INCLUDE_DIRECTORIES(BEFORE ${CMAKE_SOURCE_DIR})
 INCLUDE_DIRECTORIES(BEFORE ${CMAKE_BINARY_DIR})
-INCLUDE_DIRECTORIES(./include ./src)
+INCLUDE_DIRECTORIES(./include ./src ./libs/nuklear ./libs/nuklear/src)
 
 INSTALL(
     FILES
@@ -136,6 +198,7 @@ INSTALL(
 
 SET(tplayer_SRCS
     ./src/main.cpp
+    ./src/gui.cpp
 )
 
 INCLUDE_DIRECTORIES(${MIKMOD_INCLUDE_DIR})

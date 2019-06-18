@@ -3,6 +3,7 @@
 #include <string>
 #include <unistd.h>
 #include <mikmod.h>
+#include <gui.hpp>
 
 using namespace std;
 
@@ -38,6 +39,8 @@ int main(int argc, char** argv) {
 
         MikMod_Exit();
     }
+
+    start();
 
     return 0;
 }

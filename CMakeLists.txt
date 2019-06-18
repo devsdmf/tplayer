@@ -75,10 +75,13 @@ IF(UNIX OR APPLE)
     ENDIF()
 
     IF(HAVE_NCURSES_H)
+        MESSAGE(STATUS "Found ncurses.h: ${CURSES_LIBRARY}")
         SET(CURSES_HDR "ncurses.h")
     ELSEIF(HAVE_CURSES_H)
+        MESSAGE(STATUS "Found curses.h: ${CURSES_LIBRARY}")
         SET(CURSES_HDR "curses.h")
     ELSEIF(HAVE_NCURSES_CURSES_H)
+        MESSAGE(STATUS "Found ncurses/curses.h: ${CURSES_LIBRARY}")
         SET(CURSES_HDR "ncurses/curses.h")
     ELSE()
         MESSAGE(FATAL_ERROR "Neither curses.h nor ncurses.h found.")
@@ -130,13 +133,13 @@ ENDIF()
 
 SET(HAVE_PTHREAD)
 IF (NOT WIN32)
- INCLUDE(FindThreads)
- IF (CMAKE_USE_PTHREADS_INIT)
-    SET (HAVE_PTHREAD 1)
-    IF (CMAKE_THREAD_LIBS_INIT)
-        LIST (APPEND EXTRA_LIBS ${CMAKE_THREAD_LIBS_INIT})
+    INCLUDE(FindThreads)
+    IF (CMAKE_USE_PTHREADS_INIT)
+        SET (HAVE_PTHREAD 1)
+        IF (CMAKE_THREAD_LIBS_INIT)
+            LIST (APPEND EXTRA_LIBS ${CMAKE_THREAD_LIBS_INIT})
+        ENDIF()
     ENDIF()
- ENDIF()
 ENDIF()
 
 CHECK_MULTI_FUNCTIONS_EXISTS(
@@ -149,15 +152,15 @@ CHECK_MULTI_FUNCTIONS_EXISTS(
 )
 
 CHECK_C_SOURCE_COMPILES(
- "#include <sys/types.h>
-  #include <signal.h>
-  int main(void) { return *(signal(0,0))(0) == 1; }"
-  RETSIGTYPE_INT
+    "#include <sys/types.h>
+    #include <signal.h>
+    int main(void) { return *(signal(0,0))(0) == 1; }"
+    RETSIGTYPE_INT
 )
 if(RETSIGTYPE_INT)
-  set(RETSIGTYPE int)
+    set(RETSIGTYPE int)
 else()
-  set(RETSIGTYPE void)
+    set(RETSIGTYPE void)
 endif()
 MESSAGE(STATUS "Return type of signal handlers: ${RETSIGTYPE}")
 
@@ -175,15 +178,27 @@ IF (CPU_ARCH)
     LIST(APPEND COMPILER_FLAGS_TO_CHECK "-march=${CPU_ARCH}")
 ENDIF(CPU_ARCH)
 
+SET (IDX 1)
+FOREACH (CFLAG_TO_CHECK ${COMPILER_FLAGS_TO_CHECK})
+    SET (FLAG_EXISTS_VAR "FLAG_EXISTS_${IDX}")
+    MATH (EXPR IDX "${IDX} + 1")
+    CHECK_C_COMPILER_FLAG("${CFLAG_TO_CHECK}" ${FLAG_EXISTS_VAR})
+    IF (${FLAG_EXISTS_VAR})
+        ADD_DEFINITIONS(${CFLAG_TO_CHECK})
+    ENDIF (${FLAG_EXISTS_VAR})
+ENDFOREACH(CFLAG_TO_CHECK)
+
+
 ########### install files ###############
 
 ADD_DEFINITIONS("-DHAVE_CONFIG_H")
-SET (PACKAGE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/mikmod")
+CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/config.h.cmake ${CMAKE_BINARY_DIR}/config.h) 
 
-CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/config.h.cmake ${CMAKE_BINARY_DIR}/config.h) # So it can find config.h
+# So it can find config.h
 INCLUDE_DIRECTORIES(BEFORE ${CMAKE_SOURCE_DIR})
 INCLUDE_DIRECTORIES(BEFORE ${CMAKE_BINARY_DIR})
-INCLUDE_DIRECTORIES(./include ./src ./libs/nuklear ./libs/nuklear/src)
+
+INCLUDE_DIRECTORIES(./include ./src)
 
 INSTALL(
     FILES
